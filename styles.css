@@ -57,3 +57,24 @@ li {
   display: inline-block;
   margin-left: 10px;
 }
+
+input[type="checkbox"] {
+  transform: scale(1.2);
+  margin-left: 10px;
+  cursor: pointer;
+}
+
+label {
+  font-size: 14px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+#userName {
+  margin-left: 10px;
+  font-weight: bold;
+}
+
+#adminTools {
+  margin-top: 10px;
+}
