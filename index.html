@@ -54,9 +54,13 @@
     onAuthStateChanged(auth, async user => {
       currentUser = user;
       const userDisplay = document.getElementById("userName");
+      const importantCheck = document.getElementById("importantCheck");
+
       if (user) {
         loginBtn.style.display = "none";
         userDisplay.textContent = `Logged in as ${user.displayName}`;
+        importantCheck.disabled = false;
+        importantCheck.parentElement.style.opacity = 1;
 
         const adminDoc = await getDoc(doc(db, "admins", user.uid));
         isAdmin = adminDoc.exists() && adminDoc.data().role === "admin";
@@ -67,9 +71,12 @@
         userDisplay.textContent = "";
         isAdmin = false;
         document.getElementById("adminTools").style.display = "none";
+        importantCheck.disabled = true;
+        importantCheck.checked = false;
+        importantCheck.parentElement.style.opacity = 0.5;
       }
 
-      renderNotes(); // Initial render
+      renderNotes();
     });
 
     const addBtn = document.getElementById("addBtn");
@@ -159,7 +166,6 @@
       });
     };
 
-    // Force UI to update every 60 seconds for expiration logic
     setInterval(() => {
       renderNotes();
     }, 60000);
