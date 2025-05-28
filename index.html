@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Memo Board (Secure)</title>
+  <title>Memo Board (Admin + Expiry)</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -17,6 +17,7 @@
     <input type="text" id="noteInput" placeholder="Type a memo..." />
     <label><input type="checkbox" id="importantCheck"> Mark as Important</label>
     <button id="addBtn">Add Note</button>
+    <label><input type="checkbox" id="showDeleted"> Show Deleted Notes</label>
   </div>
 
   <ul id="notesList"></ul>
@@ -49,12 +50,17 @@
     onAuthStateChanged(auth, async user => {
       currentUser = user;
       const userDisplay = document.getElementById("userName");
+      const loginBtn = document.getElementById("loginBtn");
+
       if (user) {
+        loginBtn.style.display = "none";
         userDisplay.textContent = `Logged in as ${user.displayName}`;
+
         const adminDoc = await getDoc(doc(db, "admins", user.uid));
         isAdmin = adminDoc.exists() && adminDoc.data().role === "admin";
         console.log("🔑 UID:", user.uid);
       } else {
+        loginBtn.style.display = "inline-block";
         userDisplay.textContent = "";
         isAdmin = false;
       }
@@ -69,11 +75,13 @@
       const note = {
         text,
         important,
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
+        deleted: false
       };
       if (currentUser) {
         note.user = currentUser.displayName;
         note.uid = currentUser.uid;
+        note.fromAdmin = isAdmin;
       }
       await addDoc(collection(db, "notes"), note);
       input.value = "";
@@ -85,25 +93,32 @@
 
     onSnapshot(q, snapshot => {
       const now = Date.now();
+      const showDeleted = document.getElementById("showDeleted").checked;
       list.innerHTML = '';
       snapshot.forEach(docSnap => {
         const note = docSnap.data();
         const noteId = docSnap.id;
         const ts = note.timestamp?.toDate?.().getTime?.() || 0;
         const age = now - ts;
-        const isAnon = !note.uid;
-        const expired = isAnon && age > 60000;
-        if (expired) return;
+
+        const isGuest = !note.uid;
+        const expired =
+          (!note.important && (
+            (isGuest && age > 60000) ||
+            (!isGuest && age > 1800000)
+          ));
+
+        if ((note.deleted && !showDeleted) || expired) return;
 
         const li = document.createElement("li");
-        li.innerHTML = `<strong>[${note.user || "Guest"}]</strong> <span class="note-text">${note.text}</span>`;
+        const nameDisplay = note.fromAdmin ? `⭐ ${note.user}` : note.user || "Guest";
+        li.innerHTML = `<strong>[${nameDisplay}]</strong> <span class="note-text">${note.text}</span>`;
         if (note.important) li.style.borderLeft = "5px solid red";
+        if (note.deleted) li.style.opacity = "0.4";
 
-        // ✏️ EDIT button
-        if (currentUser?.uid === note.uid || isAdmin) {
+        if ((currentUser?.uid === note.uid || isAdmin) && !note.deleted) {
           const editBtn = document.createElement("button");
           editBtn.textContent = "Edit";
-          editBtn.style.marginLeft = "10px";
           editBtn.onclick = () => {
             const span = li.querySelector(".note-text");
             const input = document.createElement("input");
@@ -113,21 +128,19 @@
             saveBtn.onclick = async () => {
               await updateDoc(doc(db, "notes", noteId), { text: input.value });
             };
-            li.innerHTML = `<strong>[${note.user}]</strong>`;
+            li.innerHTML = `<strong>[${nameDisplay}]</strong>`;
             li.appendChild(input);
             li.appendChild(saveBtn);
           };
           li.appendChild(editBtn);
         }
 
-        // 🗑️ DELETE button (admin only)
-        if (isAdmin) {
+        if (isAdmin && !note.deleted) {
           const deleteBtn = document.createElement("button");
           deleteBtn.textContent = "Delete";
-          deleteBtn.style.marginLeft = "5px";
           deleteBtn.onclick = async () => {
-            if (confirm("Delete this memo?")) {
-              await deleteDoc(doc(db, "notes", noteId));
+            if (confirm("Soft delete this memo?")) {
+              await updateDoc(doc(db, "notes", noteId), { deleted: true });
             }
           };
           li.appendChild(deleteBtn);
@@ -135,6 +148,11 @@
 
         list.appendChild(li);
       });
+    });
+
+    document.getElementById("showDeleted").addEventListener("change", () => {
+      // Triggers re-render on checkbox toggle
+      onSnapshot(q, () => {});
     });
   </script>
 </body>
