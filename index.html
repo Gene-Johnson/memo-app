@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Memo Board (Admin + Expiry)</title>
+  <title>Memo Board</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -17,7 +17,10 @@
     <input type="text" id="noteInput" placeholder="Type a memo..." />
     <label><input type="checkbox" id="importantCheck"> Mark as Important</label>
     <button id="addBtn">Add Note</button>
-    <label><input type="checkbox" id="showDeleted"> Show Deleted Notes</label>
+
+    <div id="adminTools" style="display: none;">
+      <label><input type="checkbox" id="showDeleted"> Show Deleted Notes</label>
+    </div>
   </div>
 
   <ul id="notesList"></ul>
@@ -25,7 +28,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
     import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, onSnapshot, query, orderBy, getDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, query, orderBy, getDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCeqAyGtVwv0eCxKn0R8aQ-wfISdIyibFU",
@@ -43,27 +46,30 @@
     let currentUser = null;
     let isAdmin = false;
 
-    document.getElementById("loginBtn").onclick = () => {
+    const loginBtn = document.getElementById("loginBtn");
+    loginBtn.onclick = () => {
       signInWithPopup(auth, provider).catch(err => alert("Login failed"));
     };
 
     onAuthStateChanged(auth, async user => {
       currentUser = user;
       const userDisplay = document.getElementById("userName");
-      const loginBtn = document.getElementById("loginBtn");
-
       if (user) {
         loginBtn.style.display = "none";
         userDisplay.textContent = `Logged in as ${user.displayName}`;
 
         const adminDoc = await getDoc(doc(db, "admins", user.uid));
         isAdmin = adminDoc.exists() && adminDoc.data().role === "admin";
+        document.getElementById("adminTools").style.display = isAdmin ? "block" : "none";
         console.log("🔑 UID:", user.uid);
       } else {
         loginBtn.style.display = "inline-block";
         userDisplay.textContent = "";
         isAdmin = false;
+        document.getElementById("adminTools").style.display = "none";
       }
+
+      renderNotes(); // Initial render
     });
 
     const addBtn = document.getElementById("addBtn");
@@ -89,71 +95,76 @@
     });
 
     const list = document.getElementById("notesList");
+    const showDeletedBox = document.getElementById("showDeleted");
     const q = query(collection(db, "notes"), orderBy("timestamp", "desc"));
 
-    onSnapshot(q, snapshot => {
-      const now = Date.now();
-      const showDeleted = document.getElementById("showDeleted").checked;
-      list.innerHTML = '';
-      snapshot.forEach(docSnap => {
-        const note = docSnap.data();
-        const noteId = docSnap.id;
-        const ts = note.timestamp?.toDate?.().getTime?.() || 0;
-        const age = now - ts;
+    const renderNotes = () => {
+      onSnapshot(q, snapshot => {
+        const now = Date.now();
+        const showDeleted = showDeletedBox?.checked ?? false;
+        list.innerHTML = '';
+        snapshot.forEach(docSnap => {
+          const note = docSnap.data();
+          const noteId = docSnap.id;
+          const ts = note.timestamp?.toDate?.().getTime?.() || 0;
+          const age = now - ts;
 
-        const isGuest = !note.uid;
-        const expired =
-          (!note.important && (
-            (isGuest && age > 60000) ||
-            (!isGuest && age > 1800000)
-          ));
+          const isGuest = !note.uid;
+          const expired =
+            (!note.important && (
+              (isGuest && age > 60000) ||
+              (!isGuest && age > 1800000)
+            ));
 
-        if ((note.deleted && !showDeleted) || expired) return;
+          if ((note.deleted && !isAdmin) || (note.deleted && !showDeleted) || expired) return;
 
-        const li = document.createElement("li");
-        const nameDisplay = note.fromAdmin ? `⭐ ${note.user}` : note.user || "Guest";
-        li.innerHTML = `<strong>[${nameDisplay}]</strong> <span class="note-text">${note.text}</span>`;
-        if (note.important) li.style.borderLeft = "5px solid red";
-        if (note.deleted) li.style.opacity = "0.4";
+          const li = document.createElement("li");
+          const nameDisplay = note.fromAdmin ? `⭐ ${note.user}` : note.user || "Guest";
+          li.innerHTML = `<strong>[${nameDisplay}]</strong> <span class="note-text">${note.text}</span>`;
+          if (note.important) li.style.borderLeft = "5px solid red";
+          if (note.deleted) li.style.opacity = "0.4";
 
-        if ((currentUser?.uid === note.uid || isAdmin) && !note.deleted) {
-          const editBtn = document.createElement("button");
-          editBtn.textContent = "Edit";
-          editBtn.onclick = () => {
-            const span = li.querySelector(".note-text");
-            const input = document.createElement("input");
-            input.value = span.textContent;
-            const saveBtn = document.createElement("button");
-            saveBtn.textContent = "Save";
-            saveBtn.onclick = async () => {
-              await updateDoc(doc(db, "notes", noteId), { text: input.value });
+          if ((currentUser?.uid === note.uid || isAdmin) && !note.deleted) {
+            const editBtn = document.createElement("button");
+            editBtn.textContent = "Edit";
+            editBtn.onclick = () => {
+              const span = li.querySelector(".note-text");
+              const input = document.createElement("input");
+              input.value = span.textContent;
+              const saveBtn = document.createElement("button");
+              saveBtn.textContent = "Save";
+              saveBtn.onclick = async () => {
+                await updateDoc(doc(db, "notes", noteId), { text: input.value });
+              };
+              li.innerHTML = `<strong>[${nameDisplay}]</strong>`;
+              li.appendChild(input);
+              li.appendChild(saveBtn);
             };
-            li.innerHTML = `<strong>[${nameDisplay}]</strong>`;
-            li.appendChild(input);
-            li.appendChild(saveBtn);
-          };
-          li.appendChild(editBtn);
-        }
+            li.appendChild(editBtn);
+          }
 
-        if (isAdmin && !note.deleted) {
-          const deleteBtn = document.createElement("button");
-          deleteBtn.textContent = "Delete";
-          deleteBtn.onclick = async () => {
-            if (confirm("Soft delete this memo?")) {
-              await updateDoc(doc(db, "notes", noteId), { deleted: true });
-            }
-          };
-          li.appendChild(deleteBtn);
-        }
+          if (isAdmin && !note.deleted) {
+            const deleteBtn = document.createElement("button");
+            deleteBtn.textContent = "Delete";
+            deleteBtn.onclick = async () => {
+              if (confirm("Soft delete this memo?")) {
+                await updateDoc(doc(db, "notes", noteId), { deleted: true });
+              }
+            };
+            li.appendChild(deleteBtn);
+          }
 
-        list.appendChild(li);
+          list.appendChild(li);
+        });
       });
-    });
+    };
 
-    document.getElementById("showDeleted").addEventListener("change", () => {
-      // Triggers re-render on checkbox toggle
-      onSnapshot(q, () => {});
-    });
+    // Force UI to update every 60 seconds for expiration logic
+    setInterval(() => {
+      renderNotes();
+    }, 60000);
+
+    showDeletedBox?.addEventListener("change", renderNotes);
   </script>
 </body>
 </html>
