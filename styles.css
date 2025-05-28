@@ -78,3 +78,8 @@ label {
 #adminTools {
   margin-top: 10px;
 }
+
+input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
