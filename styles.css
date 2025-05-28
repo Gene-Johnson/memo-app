@@ -2,6 +2,13 @@ body {
   font-family: Arial, sans-serif;
   text-align: center;
   padding: 20px;
+  background-color: #fefefe;
+  color: #333;
+}
+
+h1 {
+  font-size: 2em;
+  margin-bottom: 20px;
 }
 
 .controls {
@@ -12,17 +19,41 @@ input, button, select {
   padding: 10px;
   font-size: 16px;
   margin: 5px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+button {
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #0056b3;
 }
 
 ul {
   list-style-type: none;
   padding: 0;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 li {
-  background-color: #f0f0f0;
-  margin: 10px auto;
-  padding: 10px;
-  max-width: 400px;
+  background-color: #f9f9f9;
+  margin: 10px 0;
+  padding: 15px;
+  border-left: 5px solid #007BFF;
   border-radius: 5px;
+  text-align: left;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  word-wrap: break-word;
+  position: relative;
+}
+
+.note-text {
+  display: inline-block;
+  margin-left: 10px;
 }
