@@ -18,6 +18,20 @@
 
   <!-- Firebase & Firestore -->
   <script type="module">
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+
+// Inside your script, after Firebase is initialized:
+const auth = getAuth(app);
+
+onAuthStateChanged(auth, user => {
+  if (user) {
+    console.log("🔥 Logged in as:", user.displayName);
+    console.log("🔑 Your UID is:", user.uid);
+  } else {
+    console.log("❌ Not logged in");
+  }
+});
+
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
     import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
 
