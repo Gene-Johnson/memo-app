@@ -3,37 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Memo Board (Shared)</title>
+  <title>Memo Board (Secure)</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <h1>📝 Memo Board (Shared)</h1>
+  <h1>📝 Memo Board</h1>
 
   <div class="controls">
+    <div id="authArea">
+      <button id="loginBtn">Login with Google</button>
+      <span id="userName"></span>
+    </div>
     <input type="text" id="noteInput" placeholder="Type a memo..." />
+    <label><input type="checkbox" id="importantCheck"> Mark as Important</label>
     <button id="addBtn">Add Note</button>
   </div>
 
   <ul id="notesList"></ul>
 
-  <!-- Firebase & Firestore -->
   <script type="module">
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
-
-// Inside your script, after Firebase is initialized:
-const auth = getAuth(app);
-
-onAuthStateChanged(auth, user => {
-  if (user) {
-    console.log("🔥 Logged in as:", user.displayName);
-    console.log("🔑 Your UID is:", user.uid);
-  } else {
-    console.log("❌ Not logged in");
-  }
-});
-
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, onSnapshot, query, orderBy, getDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCeqAyGtVwv0eCxKn0R8aQ-wfISdIyibFU",
@@ -41,33 +32,107 @@ onAuthStateChanged(auth, user => {
       projectId: "memoboard-5860e",
       storageBucket: "memoboard-5860e.firebasestorage.app",
       messagingSenderId: "476981178446",
-      appId: "1:476981178446:web:474fe3fe0a4eeb8f1c531f",
-      measurementId: "G-XN6415BKW7"
+      appId: "1:476981178446:web:474fe3fe0a4eeb8f1c531f"
     };
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    const notesRef = collection(db, "notes");
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+    let currentUser = null;
+    let isAdmin = false;
 
-    document.getElementById('addBtn').addEventListener('click', async () => {
-      const input = document.getElementById('noteInput');
-      const text = input.value.trim();
-      if (text) {
-        await addDoc(notesRef, {
-          text,
-          timestamp: serverTimestamp()
-        });
-        input.value = '';
+    document.getElementById("loginBtn").onclick = () => {
+      signInWithPopup(auth, provider).catch(err => alert("Login failed"));
+    };
+
+    onAuthStateChanged(auth, async user => {
+      currentUser = user;
+      const userDisplay = document.getElementById("userName");
+      if (user) {
+        userDisplay.textContent = `Logged in as ${user.displayName}`;
+        const adminDoc = await getDoc(doc(db, "admins", user.uid));
+        isAdmin = adminDoc.exists() && adminDoc.data().role === "admin";
+        console.log("🔑 UID:", user.uid);
+      } else {
+        userDisplay.textContent = "";
+        isAdmin = false;
       }
     });
 
-    const list = document.getElementById('notesList');
-    const q = query(notesRef, orderBy("timestamp", "desc"));
+    const addBtn = document.getElementById("addBtn");
+    addBtn.addEventListener("click", async () => {
+      const input = document.getElementById("noteInput");
+      const important = document.getElementById("importantCheck").checked;
+      const text = input.value.trim();
+      if (!text) return;
+      const note = {
+        text,
+        important,
+        timestamp: serverTimestamp()
+      };
+      if (currentUser) {
+        note.user = currentUser.displayName;
+        note.uid = currentUser.uid;
+      }
+      await addDoc(collection(db, "notes"), note);
+      input.value = "";
+      document.getElementById("importantCheck").checked = false;
+    });
+
+    const list = document.getElementById("notesList");
+    const q = query(collection(db, "notes"), orderBy("timestamp", "desc"));
+
     onSnapshot(q, snapshot => {
+      const now = Date.now();
       list.innerHTML = '';
-      snapshot.forEach(doc => {
-        const li = document.createElement('li');
-        li.textContent = doc.data().text;
+      snapshot.forEach(docSnap => {
+        const note = docSnap.data();
+        const noteId = docSnap.id;
+        const ts = note.timestamp?.toDate?.().getTime?.() || 0;
+        const age = now - ts;
+        const isAnon = !note.uid;
+        const expired = isAnon && age > 60000;
+        if (expired) return;
+
+        const li = document.createElement("li");
+        li.innerHTML = `<strong>[${note.user || "Guest"}]</strong> <span class="note-text">${note.text}</span>`;
+        if (note.important) li.style.borderLeft = "5px solid red";
+
+        // ✏️ EDIT button
+        if (currentUser?.uid === note.uid || isAdmin) {
+          const editBtn = document.createElement("button");
+          editBtn.textContent = "Edit";
+          editBtn.style.marginLeft = "10px";
+          editBtn.onclick = () => {
+            const span = li.querySelector(".note-text");
+            const input = document.createElement("input");
+            input.value = span.textContent;
+            const saveBtn = document.createElement("button");
+            saveBtn.textContent = "Save";
+            saveBtn.onclick = async () => {
+              await updateDoc(doc(db, "notes", noteId), { text: input.value });
+            };
+            li.innerHTML = `<strong>[${note.user}]</strong>`;
+            li.appendChild(input);
+            li.appendChild(saveBtn);
+          };
+          li.appendChild(editBtn);
+        }
+
+        // 🗑️ DELETE button (admin only)
+        if (isAdmin) {
+          const deleteBtn = document.createElement("button");
+          deleteBtn.textContent = "Delete";
+          deleteBtn.style.marginLeft = "5px";
+          deleteBtn.onclick = async () => {
+            if (confirm("Delete this memo?")) {
+              await deleteDoc(doc(db, "notes", noteId));
+            }
+          };
+          li.appendChild(deleteBtn);
+        }
+
         list.appendChild(li);
       });
     });
