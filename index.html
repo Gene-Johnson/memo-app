@@ -22,6 +22,69 @@
 
   <ul id="notesList"></ul>
 
-  <script src="script.js"></script>
+  <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Memo Board (Shared)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <h1>📝 Memo Board (Shared)</h1>
+
+  <div class="controls">
+    <input type="text" id="noteInput" placeholder="Type a memo..." />
+    <button id="addBtn">Add Note</button>
+  </div>
+
+  <ul id="notesList"></ul>
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCeqAyGtVwv0eCxKn0R8aQ-wfISdIyibFU",
+      authDomain: "memoboard-5860e.firebaseapp.com",
+      projectId: "memoboard-5860e",
+      storageBucket: "memoboard-5860e.firebasestorage.app",
+      messagingSenderId: "476981178446",
+      appId: "1:476981178446:web:474fe3fe0a4eeb8f1c531f",
+      measurementId: "G-XN6415BKW7"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const notesRef = collection(db, "notes");
+
+    document.getElementById('addBtn').addEventListener('click', async () => {
+      const input = document.getElementById('noteInput');
+      const text = input.value.trim();
+      if (text) {
+        await addDoc(notesRef, {
+          text,
+          timestamp: serverTimestamp()
+        });
+        input.value = '';
+      }
+    });
+
+    const list = document.getElementById('notesList');
+    const q = query(notesRef, orderBy("timestamp", "desc"));
+    onSnapshot(q, snapshot => {
+      list.innerHTML = '';
+      snapshot.forEach(doc => {
+        const li = document.createElement('li');
+        li.textContent = doc.data().text;
+        list.appendChild(li);
+      });
+    });
+  </script>
+</body>
+</html>
+
 </body>
 </html>
