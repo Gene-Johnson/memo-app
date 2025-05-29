@@ -3,175 +3,62 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Memo Board</title>
+  <title>📝 Memo Board</title>
   <link rel="stylesheet" href="styles.css" />
-  <script type="module" src="app.js"></script>
+  <link rel="icon" href="favicon.ico" />
 </head>
 <body>
-  <h1>📝 Memo Board</h1>
+  <header>
+    <h1>📝 Memo Board</h1>
+    <div id="user-info">Not signed in</div>
+    <button id="settings-button">Settings</button>
+  </header>
 
-  <div class="controls">
-    <div id="authArea">
-      <button id="loginBtn">Login with Google</button>
-      <span id="userName"></span>
+  <main>
+    <!-- Create Board Form -->
+    <form id="create-board-form">
+      <input type="text" id="board-name" placeholder="Enter board name" required />
+      <button type="submit">Create Board</button>
+    </form>
+
+    <!-- Boards List -->
+    <ul id="boards-list"></ul>
+
+    <!-- Memo Form -->
+    <form id="memo-form">
+      <textarea id="memo-text" placeholder="Type your memo here..."></textarea>
+      <label>
+        <input type="checkbox" id="important-checkbox" />
+        Mark as important
+      </label>
+      <button type="submit">Submit</button>
+    </form>
+
+    <!-- Admin Tools -->
+    <div id="adminTools" style="display:none;">
+      <label>
+        <input type="checkbox" id="showDeleted" />
+        Show deleted memos (admin only)
+      </label>
     </div>
-    <input type="text" id="noteInput" placeholder="Type a memo..." />
-    <label><input type="checkbox" id="importantCheck"> Mark as Important</label>
-    <button id="addBtn">Add Note</button>
 
-    <div id="adminTools" style="display: none;">
-      <label><input type="checkbox" id="showDeleted"> Show Deleted Notes</label>
+    <!-- Memo List -->
+    <ul id="memo-list"></ul>
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-content">
+      <span class="close-button" id="close-settings">&times;</span>
+      <h2>Settings</h2>
+      <ul>
+        <li><a href="help.html">Help</a></li>
+        <li><a href="privacy.html">Privacy Policy</a></li>
+        <li><a href="terms.html">Terms of Service</a></li>
+      </ul>
     </div>
   </div>
 
-  <ul id="notesList"></ul>
-
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, updateDoc, doc, serverTimestamp, onSnapshot, query, orderBy, getDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyCeqAyGtVwv0eCxKn0R8aQ-wfISdIyibFU",
-      authDomain: "memoboard-5860e.firebaseapp.com",
-      projectId: "memoboard-5860e",
-      storageBucket: "memoboard-5860e.firebasestorage.app",
-      messagingSenderId: "476981178446",
-      appId: "1:476981178446:web:474fe3fe0a4eeb8f1c531f"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const auth = getAuth(app);
-    const provider = new GoogleAuthProvider();
-    let currentUser = null;
-    let isAdmin = false;
-
-    const loginBtn = document.getElementById("loginBtn");
-    loginBtn.onclick = () => {
-      signInWithPopup(auth, provider).catch(err => alert("Login failed"));
-    };
-
-    onAuthStateChanged(auth, async user => {
-      currentUser = user;
-      const userDisplay = document.getElementById("userName");
-      const importantCheck = document.getElementById("importantCheck");
-
-      if (user) {
-        loginBtn.style.display = "none";
-        userDisplay.textContent = `Logged in as ${user.displayName}`;
-        importantCheck.disabled = false;
-        importantCheck.parentElement.style.opacity = 1;
-
-        const adminDoc = await getDoc(doc(db, "admins", user.uid));
-        isAdmin = adminDoc.exists() && adminDoc.data().role === "admin";
-        document.getElementById("adminTools").style.display = isAdmin ? "block" : "none";
-        console.log("🔑 UID:", user.uid);
-      } else {
-        loginBtn.style.display = "inline-block";
-        userDisplay.textContent = "";
-        isAdmin = false;
-        document.getElementById("adminTools").style.display = "none";
-        importantCheck.disabled = true;
-        importantCheck.checked = false;
-        importantCheck.parentElement.style.opacity = 0.5;
-      }
-
-      renderNotes();
-    });
-
-    const addBtn = document.getElementById("addBtn");
-    addBtn.addEventListener("click", async () => {
-      const input = document.getElementById("noteInput");
-      const important = document.getElementById("importantCheck").checked;
-      const text = input.value.trim();
-      if (!text) return;
-      const note = {
-        text,
-        important,
-        timestamp: serverTimestamp(),
-        deleted: false
-      };
-      if (currentUser) {
-        note.user = currentUser.displayName;
-        note.uid = currentUser.uid;
-        note.fromAdmin = isAdmin;
-      }
-      await addDoc(collection(db, "notes"), note);
-      input.value = "";
-      document.getElementById("importantCheck").checked = false;
-    });
-
-    const list = document.getElementById("notesList");
-    const showDeletedBox = document.getElementById("showDeleted");
-    const q = query(collection(db, "notes"), orderBy("timestamp", "desc"));
-
-    const renderNotes = () => {
-      onSnapshot(q, snapshot => {
-        const now = Date.now();
-        const showDeleted = showDeletedBox?.checked ?? false;
-        list.innerHTML = '';
-        snapshot.forEach(docSnap => {
-          const note = docSnap.data();
-          const noteId = docSnap.id;
-          const ts = note.timestamp?.toDate?.().getTime?.() || 0;
-          const age = now - ts;
-
-          const isGuest = !note.uid;
-          const expired =
-            (!note.important && (
-              (isGuest && age > 60000) ||
-              (!isGuest && age > 1800000)
-            ));
-
-          if ((note.deleted && !isAdmin) || (note.deleted && !showDeleted) || expired) return;
-
-          const li = document.createElement("li");
-          const nameDisplay = note.fromAdmin ? `⭐ ${note.user}` : note.user || "Guest";
-          li.innerHTML = `<strong>[${nameDisplay}]</strong> <span class="note-text">${note.text}</span>`;
-          if (note.important) li.style.borderLeft = "5px solid red";
-          if (note.deleted) li.style.opacity = "0.4";
-
-          if ((currentUser?.uid === note.uid || isAdmin) && !note.deleted) {
-            const editBtn = document.createElement("button");
-            editBtn.textContent = "Edit";
-            editBtn.onclick = () => {
-              const span = li.querySelector(".note-text");
-              const input = document.createElement("input");
-              input.value = span.textContent;
-              const saveBtn = document.createElement("button");
-              saveBtn.textContent = "Save";
-              saveBtn.onclick = async () => {
-                await updateDoc(doc(db, "notes", noteId), { text: input.value });
-              };
-              li.innerHTML = `<strong>[${nameDisplay}]</strong>`;
-              li.appendChild(input);
-              li.appendChild(saveBtn);
-            };
-            li.appendChild(editBtn);
-          }
-
-          if (isAdmin && !note.deleted) {
-            const deleteBtn = document.createElement("button");
-            deleteBtn.textContent = "Delete";
-            deleteBtn.onclick = async () => {
-              if (confirm("Soft delete this memo?")) {
-                await updateDoc(doc(db, "notes", noteId), { deleted: true });
-              }
-            };
-            li.appendChild(deleteBtn);
-          }
-
-          list.appendChild(li);
-        });
-      });
-    };
-
-    setInterval(() => {
-      renderNotes();
-    }, 60000);
-
-    showDeletedBox?.addEventListener("change", renderNotes);
-  </script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
