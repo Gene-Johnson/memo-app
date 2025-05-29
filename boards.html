@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Board</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <h1 id="board-title">Board</h1>
+  <ul id="memo-list"></ul>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js";
+    import { getFirestore, doc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      // Your Firebase config
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const boardId = urlParams.get('id');
+
+    const boardTitle = document.getElementById('board-title');
+    const memoList = document.getElementById('memo-list');
+
+    async function loadBoard() {
+      const boardDoc = await getDoc(doc(db, 'boards', boardId));
+      if (boardDoc.exists()) {
+        boardTitle.textContent = boardDoc.data().name;
+        const memosQuery = query(collection(db, 'memos'), where('boardId', '==', boardId));
+        const memosSnapshot = await getDocs(memosQuery);
+        memosSnapshot.forEach(doc => {
+          const memo = doc.data();
+          const li = document.createElement('li');
+          li.textContent = memo.content;
+          memoList.appendChild(li);
+        });
+      } else {
+        boardTitle.textContent = 'Board not found';
+      }
+    }
+
+    loadBoard();
+  </script>
+</body>
+</html>
